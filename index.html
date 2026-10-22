@@ -524,6 +524,9 @@ VIEWS_R.setup=function(){
     <h2 style="margin-top:22px">Export for your accountant</h2>
     <p class="small muted">Download any list as a CSV that opens in Excel or imports into QuickBooks.</p>
     <div class="chips">${exp.map(([k,l])=>`<button class="btn sm" data-export="${k}">${l}</button>`).join('')}</div>
+    <h2 style="margin-top:22px">Clean up duplicates</h2>
+    <p class="small muted">Finds catalog models with the same brand and model number (and suppliers or customers with the same name), keeps the oldest copy and removes the rest. Units and sales that pointed at a removed copy are re-linked to the kept one.</p>
+    ${canWrite?`<div class="chips"><button class="btn sm" data-dedupe="products">Catalog (${dupeCount('products')} extra)</button><button class="btn sm" data-dedupe="suppliers">Suppliers (${dupeCount('suppliers')} extra)</button><button class="btn sm" data-dedupe="customers">Customers (${dupeCount('customers')} extra)</button></div>`:''}
     <h2 style="margin-top:22px">Staff access</h2>
     <p class="small muted">Add or remove staff logins in your Supabase dashboard under <strong>Authentication → Users → Invite user</strong>. Each person gets an email to set their own password. Everyone who can sign in can see and edit all records.</p>
     <h2 style="margin-top:22px">Your password</h2>
@@ -536,7 +539,7 @@ VIEWS_R.setup=function(){
 const main=$('#main');
 main.addEventListener('input',e=>{const k=e.target.dataset.q;if(k!=null){UI.q[k]=e.target.value;schedule()}});
 main.addEventListener('click',e=>{
-  const t=e.target.closest('[data-chip],[data-new],[data-neworder],[data-open],[data-cmode],[data-mtab],[data-savesettings],[data-export],[data-changepw]');if(!t)return;
+  const t=e.target.closest('[data-chip],[data-new],[data-neworder],[data-open],[data-cmode],[data-mtab],[data-savesettings],[data-export],[data-changepw],[data-dedupe]');if(!t)return;
   if(t.dataset.chip){UI.filter[t.dataset.chip]=t.dataset.v;render()}
   else if(t.dataset.new){openForm(t.dataset.new)}
   else if(t.hasAttribute('data-neworder')){openOrder()}
@@ -546,6 +549,7 @@ main.addEventListener('click',e=>{
   else if(t.hasAttribute('data-savesettings')){saveSettings()}
   else if(t.dataset.export){exportCsv(t.dataset.export)}
   else if(t.hasAttribute('data-changepw')){changePassword()}
+  else if(t.dataset.dedupe){dedupe(t.dataset.dedupe)}
 });
 main.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.matches('[data-open]'))e.target.click()});
 main.addEventListener('change',e=>{if(e.target.id==='imp_file'&&e.target.files[0])importCsv(e.target.files[0],$('#imp_coll').value)});
@@ -819,6 +823,20 @@ function parseCsv(text){
   return rows.filter(r=>r.some(c=>c.trim()!==''));
 }
 const ALIAS={title:['description','item','equipment','desc'],model:['model #','model number','model no','mfr model'],brand:['manufacturer','mfr','make'],serial:['serial #','serial number','s/n','sn'],price:['asking','asking price','sell price','sale price'],cost:['our cost','cost price','paid'],listPrice:['list','list price','msrp','new list','new list price'],dealerCost:['dealer cost','net','net price'],name:['product name','item name'],company:['business','business name','company'],phone:['phone #','tel','telephone'],dims:['dimensions','size']};
+const DKEY={products:d=>((d.brand||'')+'|'+(d.model||'')).trim().toLowerCase(),suppliers:d=>(d.name||'').trim().toLowerCase(),customers:d=>((d.company||'')+'|'+(d.name||'')).trim().toLowerCase()};
+function dupeGroups(coll){const g=new Map();for(const d of S[coll]){const k=DKEY[coll](d);if(!k||k==='|')continue;(g.get(k)||g.set(k,[]).get(k)).push(d)}return [...g.values()].filter(a=>a.length>1).map(a=>a.sort((x,y)=>(x.createdAt||'').localeCompare(y.createdAt||'')))}
+function dupeCount(coll){return dupeGroups(coll).reduce((a,g)=>a+g.length-1,0)}
+async function dedupe(coll){
+  if(!need())return;const groups=dupeGroups(coll);if(!groups.length){toast('No duplicates found');return}
+  const remap=new Map();const ids=[];groups.forEach(g=>{const keep=g[0];g.slice(1).forEach(d=>{remap.set(d.id,keep.id);ids.push(d.id)})});
+  try{
+    const refs={products:[['units','productId']],suppliers:[['units','supplierId']],customers:[['orders','customerId'],['jobs','customerId']]}[coll]||[];
+    for(const [c,k] of refs)for(const d of S[c])if(remap.has(d[k]))await db.doc(c+'/'+d.id).update({[k]:remap.get(d[k])});
+    for(const o of S.orders){let ch=false;const lines=(o.lines||[]).map(l=>{if(coll==='products'&&remap.has(l.productId)){ch=true;return {...l,productId:remap.get(l.productId)}}return l});if(ch)await db.doc('orders/'+o.id).update({lines})}
+    for(let i=0;i<ids.length;i+=100)await db.collection(coll).deleteMany(ids.slice(i,i+100));
+    toast(`Removed ${ids.length} duplicate${ids.length===1?'':'s'}`);
+  }catch(err){toast('Could not clean up: '+(err.message||err.code))}
+}
 async function importCsv(file,coll){
   const say=(m,done)=>{UI.importMsg=m;UI.importBusy=!done;render()};
   if(!need())return;
@@ -866,7 +884,7 @@ function docRef(t,id){
 const loaded={};
 const dbApi={
   doc(path){const [t,id]=split(path);return docRef(t,id)},
-  collection(t){if(!TABLES.includes(t))throw new TypeError('Bad collection '+t);return {path:t,doc:id=>docRef(t,id),add:d=>{const r=docRef(t);return r.set(d).then(()=>r)},async setMany(list){const now=new Date().toISOString();const rows=list.map(d=>({id:uuid(),data:d,updated_at:now}));const {error}=await sb.from(t).upsert(rows);if(error)throw fail(error);rows.forEach(r=>cache[t].set(r.id,r));emit(t)},onSnapshot(next,err){listeners[t].add(next);if(loaded[t])next({docs:[...cache[t].values()].map(row2doc)});return ()=>listeners[t].delete(next)}}}
+  collection(t){if(!TABLES.includes(t))throw new TypeError('Bad collection '+t);return {path:t,doc:id=>docRef(t,id),add:d=>{const r=docRef(t);return r.set(d).then(()=>r)},async deleteMany(ids){if(!ids.length)return;const {error}=await sb.from(t).delete().in('id',ids);if(error)throw fail(error);ids.forEach(i=>cache[t].delete(i));emit(t)},async setMany(list){const now=new Date().toISOString();const rows=list.map(d=>({id:uuid(),data:d,updated_at:now}));const {error}=await sb.from(t).upsert(rows);if(error)throw fail(error);rows.forEach(r=>cache[t].set(r.id,r));emit(t)},onSnapshot(next,err){listeners[t].add(next);if(loaded[t])next({docs:[...cache[t].values()].map(row2doc)});return ()=>listeners[t].delete(next)}}}
 };
 async function loadTable(t){
   const {data,error}=await sb.from(t).select('*').order('created_at',{ascending:true});
