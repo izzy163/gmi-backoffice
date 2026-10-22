@@ -219,6 +219,7 @@ const ACTS=['Call','Email','Text','Visit','Note'];
 const S={products:[],units:[],customers:[],suppliers:[],orders:[],jobs:[],expenses:[]};
 let settings={};
 let db=null, canWrite=true, conn='connecting';
+let lastErr='';
 const UI={view:'dashboard',q:{},filter:{units:'stock',orders:'open',jobs:'open'},custMode:'list',money:'pl'};
 let drawer=null; // {kind, coll, id, draft}
 
@@ -337,7 +338,7 @@ function render(){
   renderNav();
   const v=VIEWS_R[UI.view]||VIEWS_R.dashboard;
   let banner='';
-  if(conn==='off')banner=`<div class="banner">Can't reach the database right now. Check your connection; this page retries on its own.</div>`;
+  if(conn==='off')banner=`<div class="banner">Can't reach the database right now. ${lastErr?'<strong>'+esc(lastErr)+'</strong>. ':''}${/does not exist|schema cache|404/i.test(lastErr||'')?'It looks like the tables have not been created: run schema.sql in Supabase → SQL Editor.':'This page retries on its own.'}</div>`;
   $('#main').innerHTML=banner+v();
   if(aid){const el=document.getElementById(aid);if(el){el.focus();if(sel)try{el.setSelectionRange(sel[0],sel[1])}catch(_){}}}
 }
@@ -843,7 +844,7 @@ const listeners={};TABLES.forEach(t=>listeners[t]=new Set());
 function row2doc(r){return {id:r.id,exists:true,data:()=>r.data||{}}}
 function emit(t){const docs=[...cache[t].values()].map(row2doc);const snap={docs,size:docs.length,empty:!docs.length};listeners[t].forEach(fn=>{try{fn(snap)}catch(e){console.error(e)}})}
 function uuid(){return crypto.randomUUID?crypto.randomUUID():'x'+Date.now().toString(36)+Math.random().toString(36).slice(2,10)}
-function fail(e){const err=new Error(e&&e.message||'Request failed');err.code=e&&e.code||'unavailable';return err}
+function fail(e){const err=new Error(e&&e.message||'Request failed');err.code=e&&e.code||'unavailable';lastErr=(e&&(e.code?e.code+': ':'')+(e.message||''))||String(e);return err}
 function split(path){const p=path.split('/');if(p.length!==2||!TABLES.includes(p[0]))throw new TypeError('Bad path '+path);return p}
 function docRef(t,id){
   id=id||uuid();
@@ -870,7 +871,7 @@ async function loadTable(t){
 let channel=null, pollTimer=0, live=false, retryTimer=0, listenersBound=false;
 async function connectData(){
   conn='connecting';render();
-  try{await Promise.all(TABLES.map(loadTable));conn='ok'}catch(e){console.error(e);conn='off'}
+  try{await Promise.all(TABLES.map(loadTable));conn='ok';lastErr=''}catch(e){console.error(e);if(!lastErr)lastErr=String(e&&e.message||e);conn='off'}
   render();
   openChannel();
   setPolling();
@@ -894,7 +895,7 @@ function openChannel(){
 }
 function setPolling(){clearInterval(pollTimer);pollTimer=setInterval(refreshAll,live?60000:15000)}
 let refreshing=false;
-async function refreshAll(){if(!sb||!me||refreshing)return;refreshing=true;try{await Promise.all(TABLES.map(loadTable));if(conn!=='ok'){conn='ok';schedule()}}catch(e){console.error(e);if(conn!=='off'){conn='off';schedule()}}refreshing=false}
+async function refreshAll(){if(!sb||!me||refreshing)return;refreshing=true;try{await Promise.all(TABLES.map(loadTable));if(conn!=='ok'){conn='ok';lastErr='';schedule()}}catch(e){console.error(e);if(!lastErr)lastErr=String(e&&e.message||e);if(conn!=='off'){conn='off';schedule()}}refreshing=false}
 
 /* ---------- auth screens ---------- */
 function showAuth(mode,msg,isErr){
