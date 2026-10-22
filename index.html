@@ -924,7 +924,13 @@ function showAuth(mode,msg,isErr){
   const first=a.querySelector('input');if(first)first.focus();
 }
 let pendingSetPw=false;
-function enterApp(){$('#auth').hidden=true;$('#shell').hidden=false;db=dbApi;render();connectData()}
+let wired=false;
+function enterApp(){$('#auth').hidden=true;$('#shell').hidden=false;db=dbApi;
+  if(!wired){wired=true;
+    for(const c of Object.keys(S))db.collection(c).onSnapshot(snap=>{S[c]=snap.docs.map(x=>({id:x.id,...x.data()}));schedule()});
+    db.doc('settings/company').onSnapshot(sn=>{settings=sn.exists?{...sn.data()}:{};schedule()});
+  }
+  render();connectData()}
 async function signOut(){await sb.auth.signOut();location.reload()}
 async function changePassword(){const pw=$('#pw_new').value;if(pw.length<8){toast('Use at least 8 characters');return}const {error}=await sb.auth.updateUser({password:pw});toast(error?error.message:'Password changed');if(!error)$('#pw_new').value=''}
 
