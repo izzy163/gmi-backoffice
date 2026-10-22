@@ -520,7 +520,7 @@ VIEWS_R.setup=function(){
     <p class="small muted">Upload a CSV (save your Excel or price list as CSV). Column headers are matched by name, e.g. <span class="mono">Brand, Model, Name, Category, List Price</span> for the catalog or <span class="mono">Description, Brand, Model, Serial, Condition, Cost, Price, Location</span> for inventory.</p>
     <div class="fgrid"><div class="fld half"><label for="imp_coll">Import into</label><select id="imp_coll"><option value="products">Catalog</option><option value="units">Inventory</option><option value="customers">Customers</option><option value="suppliers">Suppliers</option></select></div>
     <div class="fld half"><label for="imp_file">CSV file</label><input id="imp_file" type="file" accept=".csv,text/csv"></div></div>
-    <div id="imp_out" class="small" style="margin-top:10px"></div>
+    <div id="imp_out" class="small" style="margin-top:10px">${UI.importBusy?'<span class="dot ok"></span> ':''}${esc(UI.importMsg||'')}</div>
     <h2 style="margin-top:22px">Export for your accountant</h2>
     <p class="small muted">Download any list as a CSV that opens in Excel or imports into QuickBooks.</p>
     <div class="chips">${exp.map(([k,l])=>`<button class="btn sm" data-export="${k}">${l}</button>`).join('')}</div>
@@ -820,20 +820,27 @@ function parseCsv(text){
 }
 const ALIAS={title:['description','item','equipment','desc'],model:['model #','model number','model no','mfr model'],brand:['manufacturer','mfr','make'],serial:['serial #','serial number','s/n','sn'],price:['asking','asking price','sell price','sale price'],cost:['our cost','cost price','paid'],listPrice:['list','list price','msrp','new list','new list price'],dealerCost:['dealer cost','net','net price'],name:['product name','item name'],company:['business','business name','company'],phone:['phone #','tel','telephone'],dims:['dimensions','size']};
 async function importCsv(file,coll){
-  const out=$('#imp_out');if(!need())return;
-  const text=await file.text();const rows=parseCsv(text);if(rows.length<2){out.textContent='That file has no data rows.';return}
-  const head=rows[0].map(h=>h.trim().toLowerCase());const fields=COLL[coll].fields.filter(f=>f.t!=='ref'&&f.t!=='check');
+  const say=(m,done)=>{UI.importMsg=m;UI.importBusy=!done;render()};
+  if(!need())return;
+  const text=await file.text();const rows=parseCsv(text);if(rows.length<2){say('That file has no data rows.',true);return}
+  const head=rows[0].map(h=>h.replace(/^\ufeff/,'').trim().toLowerCase());const fields=COLL[coll].fields.filter(f=>f.t!=='ref'&&f.t!=='check');
   const map=fields.map(f=>{let i=head.indexOf(f.k.toLowerCase());if(i<0)i=head.indexOf(f.l.toLowerCase());if(i<0)(ALIAS[f.k]||[]).some(a=>{i=head.indexOf(a);return i>=0});if(coll==='products'&&f.k==='name'&&i<0)i=head.indexOf('description');return [f,i]}).filter(x=>x[1]>=0);
-  if(!map.length){out.textContent='None of the column headers matched. Rename them to match the field names (e.g. Brand, Model, Price) and try again.';return}
-  out.innerHTML=`Matched ${map.map(([f])=>'<strong>'+esc(f.l)+'</strong>').join(', ')}. Importing ${rows.length-1} rows… <span id="imp_n">0</span>`;
-  let n=0,next=coll==='units'?nextNum('units','tag',1001):0;
-  try{for(const r of rows.slice(1)){const d={createdAt:new Date().toISOString()};
-      for(const [f,i] of map){let v=(r[i]||'').trim();if(f.t==='money'||f.t==='number'){v=v.replace(/[$,\s]/g,'');d[f.k]=v===''?null:Number(v);if(isNaN(d[f.k]))d[f.k]=null}else if(f.t==='select'){const m=f.opts.find(o=>o.toLowerCase()===v.toLowerCase());d[f.k]=m||(v?(f.opts.includes('Other')?'Other':''):'')}else d[f.k]=v}
-      if(coll==='units'){if(!d.tag)d.tag='U-'+(next++);if(!d.status)d.status='Available';if(!d.dateIn)d.dateIn=today();if(!d.title)d.title=[d.brand,d.model].filter(Boolean).join(' ')}
-      if(coll==='customers'&&!d.stage)d.stage='Customer';
-      await db.collection(coll).doc().set(d);n++;const el=$('#imp_n');if(el)el.textContent=n}
-    out.innerHTML=`Imported <strong>${n}</strong> records.`;toast(`Imported ${n} records`);
-  }catch(err){out.innerHTML=`Stopped after ${n} records: ${esc(err.code==='quota_exceeded'?'storage limit reached':(err.message||err.code))}.`}
+  if(!map.length){say('None of the column headers matched. Rename them to match the field names (e.g. Brand, Model, Price) and try again.',true);return}
+  say(`Matched ${map.map(([f])=>f.l).join(', ')}. Importing ${rows.length-1} rows…`);
+  const key=d=>coll==='products'?((d.brand||'')+'|'+(d.model||'')).toLowerCase():coll==='units'?(d.serial||d.tag||'').toLowerCase():coll==='customers'?((d.company||'')+'|'+(d.name||'')).toLowerCase():(d.name||'').toLowerCase();
+  const existing=new Set(S[coll].map(key).filter(k=>k&&k!=='|'));
+  let next=coll==='units'?nextNum('units','tag',1001):0, skipped=0;const docs=[];
+  for(const r of rows.slice(1)){const d={createdAt:new Date().toISOString()};
+    for(const [f,i] of map){let v=(r[i]||'').trim();if(f.t==='money'||f.t==='number'){v=v.replace(/[$,\s]/g,'');d[f.k]=v===''?null:Number(v);if(isNaN(d[f.k]))d[f.k]=null}else if(f.t==='select'){const m=f.opts.find(o=>o.toLowerCase()===v.toLowerCase());d[f.k]=m||(v?(f.opts.includes('Other')?'Other':''):'')}else d[f.k]=v}
+    if(coll==='units'){if(!d.tag)d.tag='U-'+(next++);if(!d.status)d.status='Available';if(!d.dateIn)d.dateIn=today();if(!d.title)d.title=[d.brand,d.model].filter(Boolean).join(' ')}
+    if(coll==='customers'&&!d.stage)d.stage='Customer';
+    const k=key(d);if(k&&k!=='|'&&existing.has(k)){skipped++;continue}if(k)existing.add(k);
+    docs.push(d)}
+  try{
+    for(let i=0;i<docs.length;i+=100){await db.collection(coll).setMany(docs.slice(i,i+100));say(`Imported ${Math.min(i+100,docs.length)} of ${docs.length}…`)}
+    say(`Imported ${docs.length} records${skipped?` (${skipped} skipped as already in the list)`:''}.`,true);toast(`Imported ${docs.length} records`);
+  }catch(err){say(`Stopped: ${err.code==='quota_exceeded'?'storage limit reached':(err.message||err.code)}.`,true)}
+  const inp=$('#imp_file');if(inp)inp.value='';
 }
 
 /* ---------- Supabase data layer (same shape the app was written against) ---------- */
@@ -859,7 +866,7 @@ function docRef(t,id){
 const loaded={};
 const dbApi={
   doc(path){const [t,id]=split(path);return docRef(t,id)},
-  collection(t){if(!TABLES.includes(t))throw new TypeError('Bad collection '+t);return {path:t,doc:id=>docRef(t,id),add:d=>{const r=docRef(t);return r.set(d).then(()=>r)},onSnapshot(next,err){listeners[t].add(next);if(loaded[t])next({docs:[...cache[t].values()].map(row2doc)});return ()=>listeners[t].delete(next)}}}
+  collection(t){if(!TABLES.includes(t))throw new TypeError('Bad collection '+t);return {path:t,doc:id=>docRef(t,id),add:d=>{const r=docRef(t);return r.set(d).then(()=>r)},async setMany(list){const now=new Date().toISOString();const rows=list.map(d=>({id:uuid(),data:d,updated_at:now}));const {error}=await sb.from(t).upsert(rows);if(error)throw fail(error);rows.forEach(r=>cache[t].set(r.id,r));emit(t)},onSnapshot(next,err){listeners[t].add(next);if(loaded[t])next({docs:[...cache[t].values()].map(row2doc)});return ()=>listeners[t].delete(next)}}}
 };
 async function loadTable(t){
   const {data,error}=await sb.from(t).select('*').order('created_at',{ascending:true});
