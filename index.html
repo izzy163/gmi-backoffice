@@ -149,6 +149,13 @@ textarea{resize:vertical}
 .lines input[type=number]{width:96px;text-align:right}
 .lines .q input{width:60px}
 .addline{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.picker{margin-top:10px;position:relative}
+.picker input{width:100%;border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:8px 10px}
+.pickres{border:1px solid var(--line);background:var(--surface);border-radius:6px;max-height:300px;overflow-y:auto;margin-top:4px;box-shadow:0 8px 24px rgba(15,25,40,.12)}
+.pickhead{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:600;padding:7px 10px;background:var(--surface-2)}
+.pickitem{display:flex;justify-content:space-between;gap:10px;padding:8px 10px;cursor:pointer;border-top:1px solid var(--line)}
+.pickitem:hover{background:var(--accent-soft)}
+.pickitem>span:first-child{min-width:0;overflow-wrap:anywhere}
 .addline select{flex:1 1 220px;width:auto}
 .totals{margin-top:12px;margin-left:auto;max-width:320px}
 .totals .kv dd{font-weight:500}
@@ -682,7 +689,7 @@ function openOrder(id,preset){
   </div>
   <h3>Line items</h3>
   <div class="tablewrap"><table class="lines"><thead><tr><th>Description</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Our cost (landed)</th><th>Tax</th><th></th></tr></thead><tbody id="olines"></tbody></table></div>
-  ${ro?'':`<div class="addline"><select id="add_unit"></select><select id="add_prod"><option value="">+ New item from catalog…</option>${refItems('products').map(([i,l])=>`<option value="${esc(i)}">${esc(l)}</option>`).join('')}</select></div>
+  ${ro?'':`<div class="picker"><input id="add_q" type="search" autocomplete="off" placeholder="Search inventory and catalog by model, brand, tag, serial…"><div id="add_res" class="pickres" hidden></div></div>
   <div class="addline"><button class="btn sm" data-addl="custom">+ Custom line</button><button class="btn sm" data-addl="Delivery">+ Delivery</button><button class="btn sm" data-addl="Installation">+ Installation</button><button class="btn sm" data-addl="Labor">+ Labor</button></div>`}
   <div class="totals box" id="ototals"></div>
   <h3>Payments</h3><div id="opays"></div>
@@ -701,31 +708,52 @@ function openOrder(id,preset){
     const id_=e.target.id;
     if(id_==='o_cust'){const c=byId('customers',e.target.value);if(c){$('#o_exempt').checked=!!c.taxExempt}}
     if(id_==='o_status'&&e.target.value==='invoiced'&&!$('#o_inv').value)$('#o_inv').value=today();
-    if(id_==='add_unit'&&e.target.value){const u=byId('units',e.target.value);d.lines.push({unitId:u.id,productId:u.productId||'',desc:`${utitle(u)}${u.model?' — '+u.model:''}${u.serial?' (S/N '+u.serial+')':''}${u.condition?' · '+u.condition:''}`,qty:1,price:n2(u.price),cost:landed(u),taxable:true});e.target.value='';renderLines();renderUnitPicker()}
-    if(id_==='add_prod'&&e.target.value){const p=byId('products',e.target.value);d.lines.push({productId:p.id,desc:`${[p.brand,p.model].filter(Boolean).join(' ')}${p.name?' — '+p.name:''} (new)`,qty:1,price:n2(p.listPrice),cost:p.dealerCost!=null?n2(p.dealerCost):null,taxable:true});e.target.value='';renderLines()}
     sync();if(id_==='o_del'){$('#o_wty').textContent=d.deliveredDate?'Warranty until '+fdate(warrantyEnd(d)):'Starts the warranty clock.'}
     renderTotals();
   });
   h.addEventListener('input',e=>{
     const t=e.target;if(t.dataset.li!=null){const l=d.lines[+t.dataset.li];const k=t.dataset.k;l[k]=k==='desc'?t.value:k==='taxable'?t.checked:(t.value===''?null:Number(t.value));renderTotals();return}
+    if(t.id==='add_q'){renderPick();return}
     if(['o_rate','o_notes','o_inotes','o_number'].includes(t.id)){sync();renderTotals()}
   });
   h.addEventListener('click',e=>{
+    const pk=e.target.closest('[data-pick]');if(pk){pickAdd(pk.dataset.pick,pk.dataset.id);return}
     const a=e.target.closest('[data-addl],[data-rml],[data-rmp],#p_add,[data-goorder]');if(!a)return;
     if(a.dataset.addl){d.lines.push({desc:a.dataset.addl==='custom'?'':a.dataset.addl,qty:1,price:null,cost:null,taxable:true});renderLines();const ins=$('#olines').querySelectorAll('input[data-k="desc"]');ins[ins.length-1]?.focus()}
     else if(a.dataset.rml!=null){d.lines.splice(+a.dataset.rml,1);renderLines();renderUnitPicker()}
     else if(a.dataset.rmp!=null){d.payments.splice(+a.dataset.rmp,1);renderPays();renderTotals()}
     else if(a.id==='p_add'){const amt=Number($('#p_amt').value);if(!amt){$('#p_amt').focus();return}d.payments.push({date:$('#p_date').value||today(),amount:amt,method:$('#p_meth').value,note:$('#p_note').value.trim()});$('#p_amt').value='';$('#p_note').value='';renderPays();renderTotals();toast('Payment added. Save to keep it.')}
   });
+  const aq=$('#add_q');if(aq){aq.addEventListener('focus',renderPick);aq.addEventListener('keydown',ev=>{if(ev.key==='Enter'){ev.preventDefault();const f=$('#add_res .pickitem');if(f)f.click()}if(ev.key==='Escape'){$('#add_res').hidden=true}})}
+  h.addEventListener('click',e=>{if(!e.target.closest('.picker')){const box=$('#add_res');if(box)box.hidden=true}});
   const s=$('#osave');if(s)s.onclick=()=>{sync();saveOrder()};
   $('#odoc').onclick=()=>{sync();downloadDoc(d)};
   const dl=$('#odel');if(dl)armDelete(dl,deleteOrder);
 }
-function renderUnitPicker(){
-  const sel=$('#add_unit');if(!sel)return;const d=drawer.draft;const used=new Set(d.lines.map(l=>l.unitId).filter(Boolean));
-  const us=S.units.filter(u=>!used.has(u.id)&&(u.status==='Available'||u.status==='On hold'||u.status==='In repair'||(u.orderId&&u.orderId===drawer.id))).sort((a,b)=>utitle(a).localeCompare(utitle(b)));
-  sel.innerHTML=`<option value="">+ Add from inventory (${us.length} available)…</option>`+us.map(u=>`<option value="${esc(u.id)}">${esc(u.tag||'')} · ${esc(utitle(u))}${u.condition?' · '+esc(u.condition):''} · ${money0(u.price)}${u.status!=='Available'?' · '+esc(u.status):''}</option>`).join('');
+function pickCandidates(q){
+  const d=drawer.draft;const used=new Set(d.lines.map(l=>l.unitId).filter(Boolean));
+  const words=q.toLowerCase().split(/\s+/).filter(Boolean);
+  const hit=str=>{const t=str.toLowerCase();return words.every(w=>t.includes(w))};
+  const us=S.units.filter(u=>!used.has(u.id)&&(u.status==='Available'||u.status==='On hold'||u.status==='In repair'||(u.orderId&&u.orderId===drawer.id))&&hit([u.tag,u.title,u.brand,u.model,u.serial,u.category,u.condition,u.location].join(' '))).sort((a,b)=>utitle(a).localeCompare(utitle(b)));
+  const ps=words.length?S.products.filter(p=>hit([p.brand,p.model,p.name,p.category].join(' '))).sort((a,b)=>LABEL.products(a).localeCompare(LABEL.products(b))):[];
+  return {us,ps};
 }
+function renderPick(){
+  const inp=$('#add_q'),box=$('#add_res');if(!inp||!box)return;const q=inp.value.trim();const {us,ps}=pickCandidates(q);
+  const U=us.slice(0,12),P=ps.slice(0,12);
+  if(!U.length&&!P.length){box.innerHTML=`<div class="pickhead">${q?'Nothing matches. Use "+ Custom line" below.':'No units in stock. Type to search the catalog.'}</div>`;box.hidden=false;return}
+  box.innerHTML=(U.length?`<div class="pickhead">In stock${us.length>12?` · showing 12 of ${us.length}`:''}</div>`+U.map(u=>`<div class="pickitem" data-pick="unit" data-id="${esc(u.id)}"><span><span class="tag">${esc(u.tag||'')}</span> ${esc(utitle(u))}<span class="small muted"> ${esc([u.brand,u.model].filter(Boolean).join(' '))}${u.condition?' · '+esc(u.condition):''}${u.status!=='Available'?' · '+esc(u.status):''}</span></span><span class="num">${money0(u.price)}</span></div>`).join(''):'')+
+   (P.length?`<div class="pickhead">Catalog (new)${ps.length>12?` · showing 12 of ${ps.length}`:''}</div>`+P.map(p=>`<div class="pickitem" data-pick="prod" data-id="${esc(p.id)}"><span>${esc([p.brand,p.model].filter(Boolean).join(' '))}<span class="small muted"> ${esc(p.name||'')}</span></span><span class="num">${p.listPrice!=null?money0(p.listPrice):'<span class="muted">no list price</span>'}</span></div>`).join(''):'');
+  box.hidden=false;
+}
+function pickAdd(kind,id){
+  const d=drawer.draft;
+  if(kind==='unit'){const u=byId('units',id);if(!u)return;d.lines.push({unitId:u.id,productId:u.productId||'',desc:`${utitle(u)}${u.model?' — '+u.model:''}${u.serial?' (S/N '+u.serial+')':''}${u.condition?' · '+u.condition:''}`,qty:1,price:n2(u.price),cost:landed(u),taxable:true})}
+  else{const p=byId('products',id);if(!p)return;d.lines.push({productId:p.id,desc:`${[p.brand,p.model].filter(Boolean).join(' ')}${p.name?' — '+p.name:''} (new)`,qty:1,price:n2(p.listPrice),cost:p.dealerCost!=null?n2(p.dealerCost):null,taxable:true})}
+  const inp=$('#add_q');if(inp){inp.value='';inp.focus()}const box=$('#add_res');if(box)box.hidden=true;
+  renderLines();toast('Line added');
+}
+function renderUnitPicker(){const box=$('#add_res');if(box&&!box.hidden)renderPick()}
 function renderLines(){
   const d=drawer.draft, ro=!canWrite;
   $('#olines').innerHTML=d.lines.length?d.lines.map((l,i)=>`<tr><td>${l.unitId?`<span class="tag" style="margin-bottom:4px">${esc((byId('units',l.unitId)||{}).tag||'unit')}</span>`:''}<input type="text" data-li="${i}" data-k="desc" value="${esc(l.desc)}" aria-label="Description" ${ro?'disabled':''}></td><td class="q num"><input type="number" step="any" data-li="${i}" data-k="qty" value="${esc(l.qty??1)}" aria-label="Quantity" ${ro?'disabled':''}></td><td class="num"><input type="number" step="0.01" data-li="${i}" data-k="price" value="${l.price==null?'':esc(l.price)}" aria-label="Price" ${ro?'disabled':''}></td><td class="num"><input type="number" step="0.01" data-li="${i}" data-k="cost" value="${l.cost==null?'':esc(l.cost)}" aria-label="Our cost" ${ro?'disabled':''}></td><td><input type="checkbox" data-li="${i}" data-k="taxable" ${l.taxable!==false?'checked':''} aria-label="Taxable" ${ro?'disabled':''}></td><td>${ro?'':`<button class="btn ghost sm" data-rml="${i}" aria-label="Remove line">✕</button>`}</td></tr>`).join(''):`<tr><td colspan="6" class="muted small" style="padding:14px">No items yet. Add equipment from inventory or the catalog below.</td></tr>`;
