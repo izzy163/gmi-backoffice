@@ -865,22 +865,36 @@ async function loadTable(t){
   if(error)throw fail(error);
   cache[t]=new Map(data.map(r=>[r.id,r]));loaded[t]=true;emit(t);
 }
-let channel=null, pollTimer=0;
+/* Live sync is best-effort: the status light only reflects whether reads and saves work.
+   If the realtime channel drops, we poll more often and quietly try to reconnect. */
+let channel=null, pollTimer=0, live=false, retryTimer=0, listenersBound=false;
 async function connectData(){
   conn='connecting';render();
   try{await Promise.all(TABLES.map(loadTable));conn='ok'}catch(e){console.error(e);conn='off'}
   render();
-  if(channel){sb.removeChannel(channel)}
-  channel=sb.channel('all-tables');
+  openChannel();
+  setPolling();
+  if(!listenersBound){listenersBound=true;
+    document.addEventListener('visibilitychange',()=>{if(!document.hidden){refreshAll();if(!live)openChannel()}});
+    window.addEventListener('online',()=>{refreshAll();openChannel()});
+  }
+}
+function openChannel(){
+  clearTimeout(retryTimer);
+  if(channel){try{sb.removeChannel(channel)}catch(_){}channel=null}
+  channel=sb.channel('all-tables-'+Date.now());
   TABLES.forEach(t=>channel.on('postgres_changes',{event:'*',schema:'public',table:t},p=>{
     if(p.eventType==='DELETE'){cache[t].delete(p.old.id)}else{cache[t].set(p.new.id,p.new)}
     emit(t);
   }));
-  channel.subscribe(status=>{if(status==='SUBSCRIBED'&&conn!=='ok'){conn='ok';schedule()}if(status==='CHANNEL_ERROR'||status==='TIMED_OUT'){conn='off';schedule()}});
-  clearInterval(pollTimer);pollTimer=setInterval(refreshAll,60000);
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshAll()});
+  channel.subscribe(status=>{
+    if(status==='SUBSCRIBED'){live=true;setPolling();refreshAll()}
+    else if(status==='CHANNEL_ERROR'||status==='TIMED_OUT'||status==='CLOSED'){live=false;setPolling();clearTimeout(retryTimer);retryTimer=setTimeout(openChannel,15000)}
+  });
 }
-async function refreshAll(){if(!sb||!me)return;try{await Promise.all(TABLES.map(loadTable));if(conn!=='ok'){conn='ok';schedule()}}catch(e){conn='off';schedule()}}
+function setPolling(){clearInterval(pollTimer);pollTimer=setInterval(refreshAll,live?60000:15000)}
+let refreshing=false;
+async function refreshAll(){if(!sb||!me||refreshing)return;refreshing=true;try{await Promise.all(TABLES.map(loadTable));if(conn!=='ok'){conn='ok';schedule()}}catch(e){console.error(e);if(conn!=='off'){conn='off';schedule()}}refreshing=false}
 
 /* ---------- auth screens ---------- */
 function showAuth(mode,msg,isErr){
