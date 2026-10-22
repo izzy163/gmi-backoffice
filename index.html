@@ -148,6 +148,12 @@ textarea{resize:vertical}
 .lines input[type=text]{min-width:180px}
 .lines input[type=number]{width:96px;text-align:right}
 .lines .q input{width:60px}
+.thumb{width:44px;height:44px;object-fit:cover;border-radius:4px;background:var(--surface-2);display:inline-block;vertical-align:middle;flex:none}
+.thumb.none{border:1px dashed var(--line)}
+.pstrip{display:flex;flex-wrap:wrap;gap:8px}
+.pcell{margin:0;position:relative;width:120px}
+.pcell img{width:120px;height:120px;object-fit:cover;border-radius:6px;border:1px solid var(--line);display:block}
+.pcell .pdel{position:absolute;top:2px;right:2px;background:var(--surface);border-radius:50%;padding:2px 6px}
 .addline{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 .picker{margin-top:10px;position:relative}
 .picker input{width:100%;border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:8px 10px}
@@ -259,6 +265,38 @@ const unitBadge=s=>badge(s||'—',{Available:'good','On hold':'warn','In repair'
 const stageBadge=s=>badge(s||'—',{Lead:'acc',Prospect:'warn',Customer:'good',Inactive:''}[s]);
 const jobBadge=s=>badge(s||'—',{Scheduled:'acc','In progress':'warn','Waiting on parts':'bad',Done:'good',Cancelled:''}[s]);
 function utitle(u){return u.title||[u.brand,u.model].filter(Boolean).join(' ')||'Untitled unit'}
+const CATPHOTO={"D28AR-GS1":"images/dukers/reachin-top-glass.jpg","D55AR-GS2":"images/dukers/reachin-top-glass.jpg","D83AR-GS3":"images/dukers/reachin-top-glass.jpg","D28AR":"images/dukers/reachin-top-solid.jpg","D55AR":"images/dukers/reachin-top-solid.jpg","D83AR":"images/dukers/reachin-top-solid.jpg","D28AF":"images/dukers/reachin-top-freezer.jpg","D55AF":"images/dukers/reachin-top-freezer.jpg","D83AF":"images/dukers/reachin-top-freezer.jpg","D28R":"images/dukers/reachin-bottom-solid.jpg","D55R":"images/dukers/reachin-bottom-solid.jpg","D83R":"images/dukers/reachin-bottom-solid.jpg","D28F":"images/dukers/reachin-bottom-freezer.jpg","D55F":"images/dukers/reachin-bottom-freezer.jpg","D83F":"images/dukers/reachin-bottom-freezer.jpg","D28F-GS1":"images/dukers/reachin-bottom-freezer-glass.jpg","D55F-GS2":"images/dukers/reachin-bottom-freezer-glass.jpg","D28R-GS1":"images/dukers/reachin-bottom-glass.jpg","D55R-GS2":"images/dukers/reachin-bottom-glass.jpg","D83R-GS3":"images/dukers/reachin-bottom-glass.jpg","DUC29R":"images/dukers/undercounter.jpg","DUC48R":"images/dukers/undercounter.jpg","DUC60R":"images/dukers/undercounter.jpg","DUC72R":"images/dukers/undercounter.jpg","DUC29F":"images/dukers/undercounter.jpg","DUC48F":"images/dukers/undercounter.jpg","DUC60F":"images/dukers/undercounter.jpg","DUC72F":"images/dukers/undercounter.jpg","DPP44-6-S1":"images/dukers/pizza-prep.jpg","DPP70-9-S2":"images/dukers/pizza-prep.jpg","DPP90-12-S3":"images/dukers/pizza-prep.jpg","DSP29-8-S1":"images/dukers/salad-prep.jpg","DSP48-12-S2":"images/dukers/salad-prep.jpg","DSP60-16-S2":"images/dukers/salad-prep.jpg","DSP72-18-S3":"images/dukers/salad-prep.jpg","DSP29-12M-S1":"images/dukers/salad-prep.jpg","DSP48-18M-S2":"images/dukers/salad-prep.jpg","DSP60-24M-S2":"images/dukers/salad-prep.jpg","DSP72-30M-S3":"images/dukers/salad-prep.jpg","DCB36":"images/dukers/chef-base.jpg","DCB48":"images/dukers/chef-base.jpg","DCB52":"images/dukers/chef-base.jpg","DCB52-60":"images/dukers/chef-base.jpg","DCB72":"images/dukers/chef-base.jpg","DBB48-H2":"images/dukers/backbar-glass.jpg","DBB60-H2":"images/dukers/backbar-glass.jpg","DBB72-H3":"images/dukers/backbar-glass.jpg","DBB48-S2":"images/dukers/backbar-glass.jpg","DBB60-S2":"images/dukers/backbar-glass.jpg","DBB72-S3":"images/dukers/backbar-glass.jpg","DBB48-M2":"images/dukers/backbar-solid.jpg","DBB60-M2":"images/dukers/backbar-solid.jpg","DBB72-M3":"images/dukers/backbar-solid.jpg","DKB48-M2":"images/dukers/kegerator.jpg","DKB60-M2":"images/dukers/kegerator.jpg","DKB72-M3":"images/dukers/kegerator.jpg","DSM-12R":"images/dukers/merch-1door.jpg","DSM-15R":"images/dukers/merch-1door.jpg","DSM-19R":"images/dukers/merch-1door.jpg","LG-430":"images/dukers/merch-1door.jpg","DSM-33R":"images/dukers/merch-2swing.jpg","DSM-41R":"images/dukers/merch-2swing.jpg","DSM-48R":"images/dukers/merch-2swing.jpg","DSM-69R":"images/dukers/merch-3swing.jpg","DSM-32SR":"images/dukers/merch-2slide.jpg","DSM-40SR":"images/dukers/merch-2slide.jpg","DSM-47SR":"images/dukers/merch-2slide-47.jpg","DSM-68SR":"images/dukers/merch-3slide.jpg","WD-500Y":"images/dukers/chest-freezer.jpg","WD-700Y":"images/dukers/chest-freezer.jpg","DCCB24":"images/dukers/charbroiler.jpg","DCCB36":"images/dukers/charbroiler.jpg","DCCB48":"images/dukers/charbroiler.jpg","DCF3-NG":"images/dukers/fryer.jpg","DCF3-LPG":"images/dukers/fryer.jpg","DCF4-NG":"images/dukers/fryer.jpg","DCF4-LPG":"images/dukers/fryer.jpg","DCF5-NG":"images/dukers/fryer.jpg","DCF5-LPG":"images/dukers/fryer.jpg","DCGM24":"images/dukers/griddle.jpg","DCGM36":"images/dukers/griddle.jpg","DCGM48":"images/dukers/griddle.jpg","DCGMA24":"images/dukers/griddle.jpg","DCGMA36":"images/dukers/griddle.jpg","DCGMA48":"images/dukers/griddle.jpg","DCHPA12":"images/dukers/hotplate.jpg","DCHPA24":"images/dukers/hotplate.jpg","DCHPA36":"images/dukers/hotplate.jpg","DCHPA48":"images/dukers/hotplate.jpg","DCSP1":"images/dukers/stockpot.jpg","DCSP2":"images/dukers/stockpot.jpg","DCR24-4B":"images/dukers/range-24.jpg","DCR24-GM":"images/dukers/range-24.jpg","DCR36-6B":"images/dukers/range-36.jpg","DCR36-2B24GM":"images/dukers/range-36.jpg","DCR36-4B12GM":"images/dukers/range-36.jpg","DCR60-10B":"images/dukers/range-60.jpg","DCR60-6B24GM":"images/dukers/range-60.jpg","DCR60-4B36GM":"images/dukers/range-60.jpg","DCF7E":"images/dukers/electric-fryer.jpg","DCF7EB":"images/dukers/electric-fryer.jpg","DCF7ED":"images/dukers/electric-fryer.jpg","DCF7EBD":"images/dukers/electric-fryer.jpg","DCF10E":"images/dukers/electric-fryer.jpg","DCF10EB":"images/dukers/electric-fryer.jpg","DCF10ED":"images/dukers/electric-fryer.jpg","DCF10EBD":"images/dukers/electric-fryer.jpg","DCF15E":"images/dukers/electric-fryer.jpg","DCF15EB":"images/dukers/electric-fryer.jpg","DCF15ED":"images/dukers/electric-fryer.jpg","DCF15EBD":"images/dukers/electric-fryer.jpg","DCOS-1650":"images/dukers/overshelf.jpg","DCOS-1662":"images/dukers/overshelf.jpg","DCOS-1674":"images/dukers/overshelf.jpg","DCOS-1850":"images/dukers/overshelf.jpg","DCOS-1862":"images/dukers/overshelf.jpg","DCOS-1874":"images/dukers/overshelf.jpg"};
+const BUCKET='photos';
+function photoUrl(path){if(!path)return'';if(/^(https?:)?\//.test(path)||path.startsWith('images/'))return path;try{return sb.storage.from(BUCKET).getPublicUrl(path).data.publicUrl}catch(_){return''}}
+function catalogPhoto(p){if(!p)return'';if(p.photos&&p.photos.length)return photoUrl(p.photos[0]);const m=(p.model||'').toUpperCase();return CATPHOTO[m]||''}
+function unitPhoto(u){if(u.photos&&u.photos.length)return photoUrl(u.photos[0]);return catalogPhoto(byId('products',u.productId))}
+function thumb(url,alt){return url?`<img class="thumb" src="${esc(url)}" alt="${esc(alt||'')}" loading="lazy">`:'<span class="thumb none"></span>'}
+function photoStrip(coll,d,id){
+  const own=(d.photos||[]);const cat=coll==='units'?catalogPhoto(byId('products',d.productId)):(coll==='products'?CATPHOTO[(d.model||'').toUpperCase()]||'':'');
+  return `<h3>Photos</h3><div class="pstrip" id="pstrip">${own.map((ph,i)=>`<figure class="pcell"><a href="${esc(photoUrl(ph))}" target="_blank" rel="noopener"><img src="${esc(photoUrl(ph))}" alt="Photo ${i+1}"></a>${canWrite?`<button class="btn ghost sm pdel" data-pdel="${i}" aria-label="Remove photo">✕</button>`:''}</figure>`).join('')}${!own.length&&cat?`<figure class="pcell"><img src="${esc(cat)}" alt="Catalog photo"><figcaption class="small muted">Catalog photo</figcaption></figure>`:''}${!own.length&&!cat?'<div class="small muted">No photos yet.</div>':''}</div>
+  ${canWrite?(id?`<label class="btn sm" style="margin-top:8px"><input type="file" id="padd" accept="image/*" multiple hidden> 📷 Add photos</label><span class="small muted" id="pmsg"></span>`:'<div class="small muted" style="margin-top:6px">Save first, then you can add photos.</div>'):''}`;
+}
+async function shrink(file,max=1600){
+  const bmp=await createImageBitmap(file).catch(()=>null);if(!bmp)return file;
+  const sc=Math.min(1,max/Math.max(bmp.width,bmp.height));const c=document.createElement('canvas');c.width=Math.round(bmp.width*sc);c.height=Math.round(bmp.height*sc);
+  c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);return new Promise(res=>c.toBlob(b=>res(b||file),'image/jpeg',0.85));
+}
+function bindPhotos(coll,id){
+  const inp=$('#padd');if(inp)inp.onchange=async()=>{
+    if(!need())return;const files=[...inp.files];if(!files.length)return;const msg=$('#pmsg');let n=0;
+    try{for(const f of files){msg.textContent=`Uploading ${n+1} of ${files.length}…`;const blob=await shrink(f);const path=`${coll}/${id}/${Date.now()}-${n}.jpg`;
+        const {error}=await sb.storage.from(BUCKET).upload(path,blob,{contentType:'image/jpeg',upsert:false});if(error)throw error;
+        const cur=byId(coll,id);await db.doc(coll+'/'+id).update({photos:[...((cur&&cur.photos)||[]),path]});n++}
+      toast(`${n} photo${n===1?'':'s'} added`);msg.textContent='';
+    }catch(err){toast('Upload failed: '+(err.message||err.code||'check that the photos bucket exists'))}
+    const d=byId(coll,id);const strip=$('#pstrip');if(strip&&d){const tmp=document.createElement('div');tmp.innerHTML=photoStrip(coll,d,id);strip.replaceWith(tmp.querySelector('#pstrip'))}inp.value='';bindPhotos(coll,id);
+  };
+  $('#drawerRoot').querySelectorAll('[data-pdel]').forEach(b=>b.onclick=async()=>{
+    if(!need())return;const d=byId(coll,id);const i=+b.dataset.pdel;const ph=d.photos[i];
+    try{await sb.storage.from(BUCKET).remove([ph]);await db.doc(coll+'/'+id).update({photos:d.photos.filter((_,k)=>k!==i)});toast('Photo removed')}catch(err){toast('Could not remove: '+(err.message||err.code))}
+    const d2=byId(coll,id);const strip=$('#pstrip');if(strip&&d2){const tmp=document.createElement('div');tmp.innerHTML=photoStrip(coll,d2,id);strip.replaceWith(tmp.querySelector('#pstrip'))}bindPhotos(coll,id);
+  });
+}
 const COSTK=['cost','freight','palletizing','repairLabor','repairParts'];
 function landed(u){return r2(COSTK.reduce((a,k)=>a+n2(u[k]),0))}
 function costBox(u){const L=landed(u),p=n2(u.price);const rows=[['Purchase cost','cost'],['Freight in','freight'],['Palletizing / crating','palletizing'],['Repair labor','repairLabor'],['Repair parts','repairParts']];return `<div class="kv">${rows.map(([l,k])=>`<dt>${l}</dt><dd>${money(u[k])}</dd>`).join('')}<dt><strong>Landed cost</strong></dt><dd><strong>${money(L)}</strong></dd>${p?`<dt>Profit at asking</dt><dd class="${p-L<0?'neg':'pos'}">${money(p-L)} · ${Math.round((p-L)/p*100)}%</dd>`:''}</div>`}
@@ -396,6 +434,7 @@ VIEWS_R.inventory=function(){
   return pageHead('Inventory',`${rows.length} units · ${money0(tc)} landed cost · ${money0(ta)} asking`,`<button class="btn primary" data-new="units">+ Add unit</button>`)+
   `<div class="toolbar">${searchBox('units','Search tag, model, serial, location…')}${chips('units',[['stock','In stock',cnt('stock')],['Available','Available',cnt('Available')],['On hold','On hold',cnt('On hold')],['In repair','In repair',cnt('In repair')],['Sold','Sold',cnt('Sold')],['all','All',cnt('all')]])}</div>`+
   table([
+   {l:'',v:u=>thumb(unitPhoto(u),utitle(u))},
    {l:'Tag',v:u=>`<span class="tag">${esc(u.tag||'—')}</span>`},
    {l:'Equipment',v:u=>`<div>${esc(utitle(u))}</div><div class="small muted">${esc([u.brand,u.model].filter(Boolean).join(' '))}${u.serial?` · S/N <span class="mono">${esc(u.serial)}</span>`:''}</div>${catChip(u.category)}${u.fuel?`<span class="spec">${esc(u.fuel)}</span>`:''}${u.electrical?`<span class="spec">${esc(u.electrical)}</span>`:''}`},
    {l:'Condition',v:u=>esc(u.condition||'')},
@@ -413,6 +452,7 @@ VIEWS_R.catalog=function(){
   return pageHead('Catalog',`${S.products.length} models you carry or quote`,`<button class="btn primary" data-new="products">+ Add model</button>`)+
   `<div class="toolbar">${searchBox('products','Search brand, model, category…')}</div>`+
   table([
+   {l:'',v:p=>thumb(catalogPhoto(p),LABEL.products(p))},
    {l:'Brand',v:p=>esc(p.brand||'')},{l:'Model',v:p=>`<span class="mono">${esc(p.model||'')}</span>`},
    {l:'Name',v:p=>`${esc(p.name||'')}${p.fuel?`<br><span class="spec">${esc(p.fuel)}</span>`:''}${p.electrical?`<span class="spec">${esc(p.electrical)}</span>`:''}`},
    {l:'Category',v:p=>catChip(p.category)},
@@ -606,6 +646,7 @@ function openForm(coll,id,preset){
   const sv=$('#fsave');if(sv)sv.onclick=()=>saveForm(coll,id);
   const dl=$('#fdel');if(dl)armDelete(dl,()=>delDoc(coll,id));
   if(BIND[coll])BIND[coll](doc,id);
+  if(id&&(coll==='units'||coll==='products'))bindPhotos(coll,id);
 }
 async function saveForm(coll,id){
   if(!need())return;
@@ -629,13 +670,13 @@ async function delDoc(coll,id){
 /* extra panels inside drawers */
 const EXTRA={
   units(u,id){
-    let h=`<div class="box" style="margin-top:16px" id="landedBox">${costBox(u)}</div>`;const p=byId('products',u.productId);
+    let h=photoStrip('units',u,id)+`<div class="box" style="margin-top:16px" id="landedBox">${costBox(u)}</div>`;const p=byId('products',u.productId);
     if(p&&p.listPrice){const off=u.price?Math.round((1-u.price/p.listPrice)*100):null;h+=`<div class="box" style="margin-top:16px"><div class="kv"><dt>New list price</dt><dd>${money(p.listPrice)}</dd>${off!=null?`<dt>Your asking price is</dt><dd>${off}% below new</dd>`:''}${p.specUrl?`<dt>Spec sheet</dt><dd><a href="${esc(p.specUrl)}" target="_blank" rel="noopener">Open</a></dd>`:''}</div></div>`}
     if(id&&u.orderId){const o=byId('orders',u.orderId);if(o)h+=`<div class="box" style="margin-top:12px">On <a href="#" data-goorder="${esc(o.id)}">#${esc(o.number)} for ${esc(custName(o.customerId))}</a> ${obadge(o)}${o.deliveredDate?`<div class="small muted">Delivered ${fdate(o.deliveredDate)} · warranty until ${fdate(warrantyEnd(o))}</div>`:''}</div>`}
     if(id){const js=S.jobs.filter(j=>j.unitId===id);if(js.length)h+=`<h3>Service history</h3>`+js.map(j=>`<div class="small">${esc(j.num)} · ${esc(j.type||'')} · ${fdate(j.date)} ${jobBadge(j.status)}</div>`).join('')}
     return h;
   },
-  products(p,id){if(!id)return'';const us=S.units.filter(u=>u.productId===id);return us.length?`<h3>Units of this model</h3>`+us.map(u=>`<div class="small"><span class="tag">${esc(u.tag)}</span> ${esc(u.condition||'')} · ${unitBadge(u.status)} · ${money(u.price)}</div>`).join(''):''},
+  products(p,id){const ph=photoStrip('products',p,id);if(!id)return ph;const us=S.units.filter(u=>u.productId===id);return ph+(us.length?`<h3>Units of this model</h3>`+us.map(u=>`<div class="small"><span class="tag">${esc(u.tag)}</span> ${esc(u.condition||'')} · ${unitBadge(u.status)} · ${money(u.price)}</div>`).join(''):'')},
   suppliers(s,id){if(!id)return'';const us=S.units.filter(u=>u.supplierId===id);return us.length?`<h3>Bought from them</h3>`+us.map(u=>`<div class="small"><span class="tag">${esc(u.tag)}</span> ${esc(utitle(u))} · ${money(u.cost)} · ${unitBadge(u.status)}</div>`).join(''):''},
   jobs(j){const o=byId('orders',j.orderId);const we=warrantyEnd(o);return we?`<div class="box" style="margin-top:16px">Delivered ${fdate(o.deliveredDate)} · warranty ${((j.date||today())<=we)?`<strong class="pos">covers this job</strong> (until ${fdate(we)})`:`<strong class="neg">ended ${fdate(we)}</strong>`}</div>`:''},
   customers(c,id){
@@ -742,8 +783,8 @@ function renderPick(){
   const inp=$('#add_q'),box=$('#add_res');if(!inp||!box)return;const q=inp.value.trim();const {us,ps}=pickCandidates(q);
   const U=us.slice(0,12),P=ps.slice(0,12);
   if(!U.length&&!P.length){box.innerHTML=`<div class="pickhead">${q?'Nothing matches. Use "+ Custom line" below.':'No units in stock. Type to search the catalog.'}</div>`;box.hidden=false;return}
-  box.innerHTML=(U.length?`<div class="pickhead">In stock${us.length>12?` · showing 12 of ${us.length}`:''}</div>`+U.map(u=>`<div class="pickitem" data-pick="unit" data-id="${esc(u.id)}"><span><span class="tag">${esc(u.tag||'')}</span> ${esc(utitle(u))}<span class="small muted"> ${esc([u.brand,u.model].filter(Boolean).join(' '))}${u.condition?' · '+esc(u.condition):''}${u.status!=='Available'?' · '+esc(u.status):''}</span></span><span class="num">${money0(u.price)}</span></div>`).join(''):'')+
-   (P.length?`<div class="pickhead">Catalog (new)${ps.length>12?` · showing 12 of ${ps.length}`:''}</div>`+P.map(p=>`<div class="pickitem" data-pick="prod" data-id="${esc(p.id)}"><span>${esc([p.brand,p.model].filter(Boolean).join(' '))}<span class="small muted"> ${esc(p.name||'')}</span></span><span class="num">${p.listPrice!=null?money0(p.listPrice):'<span class="muted">no list price</span>'}</span></div>`).join(''):'');
+  box.innerHTML=(U.length?`<div class="pickhead">In stock${us.length>12?` · showing 12 of ${us.length}`:''}</div>`+U.map(u=>`<div class="pickitem" data-pick="unit" data-id="${esc(u.id)}"><span>${thumb(unitPhoto(u))} <span class="tag">${esc(u.tag||'')}</span> ${esc(utitle(u))}<span class="small muted"> ${esc([u.brand,u.model].filter(Boolean).join(' '))}${u.condition?' · '+esc(u.condition):''}${u.status!=='Available'?' · '+esc(u.status):''}</span></span><span class="num">${money0(u.price)}</span></div>`).join(''):'')+
+   (P.length?`<div class="pickhead">Catalog (new)${ps.length>12?` · showing 12 of ${ps.length}`:''}</div>`+P.map(p=>`<div class="pickitem" data-pick="prod" data-id="${esc(p.id)}"><span>${thumb(catalogPhoto(p))} ${esc([p.brand,p.model].filter(Boolean).join(' '))}<span class="small muted"> ${esc(p.name||'')}</span></span><span class="num">${p.listPrice!=null?money0(p.listPrice):'<span class="muted">no list price</span>'}</span></div>`).join(''):'');
   box.hidden=false;
 }
 function pickAdd(kind,id){
