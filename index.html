@@ -872,6 +872,25 @@ ${s.terms?`<div class="terms">${e(s.terms)}</div>`:''}
 }
 function downloadDoc(o){const d=buildDoc(o);saveFile(d.filename,d.html)}
 const DOCBUCKET='documents';
+function buildEmailHtml(o,link,message){
+  const c=calc(o),cu=byId('customers',o.customerId)||{},sv=settings,e=esc,kind=buildDoc(o).kind;
+  const td='padding:8px 6px;border-bottom:1px solid #e3e6ea;font-size:14px;vertical-align:top',th='padding:6px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#555;border-bottom:2px solid #13213a;text-align:left';
+  return `<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;background:#eef1f4;font-family:Helvetica,Arial,sans-serif;color:#141c25">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef1f4;padding:24px 0"><tr><td align="center">
+<table role="presentation" width="640" cellpadding="0" cellspacing="0" style="max-width:640px;width:100%;background:#fff;border-radius:8px;overflow:hidden">
+ <tr><td style="background:#13213a;color:#fff;padding:18px 24px"><table width="100%" role="presentation"><tr><td style="font-size:20px;font-weight:bold">${e(sv.companyName||'')}</td><td align="right" style="font-size:18px;letter-spacing:.06em">${e(kind.toUpperCase())} #${e(o.number)}</td></tr></table></td></tr>
+ <tr><td style="padding:22px 24px 6px;font-size:15px;line-height:1.5;white-space:pre-wrap">${e(message)}</td></tr>
+ <tr><td style="padding:10px 24px"><table width="100%" role="presentation"><tr><td style="font-size:13px;color:#555">Bill to<br><strong style="color:#141c25;font-size:14px">${e(cu.company||cu.name||'')}</strong>${cu.company&&cu.name?'<br>'+e(cu.name):''}${cu.address?'<br>'+e(cu.address):''}</td><td align="right" style="font-size:13px;color:#555">${kind==='Invoice'?'Invoice date':'Date'}<br><strong style="color:#141c25">${fdate(kind==='Invoice'?(o.invoiceDate||o.date):o.date)}</strong>${kind==='Quote'?'<br>Valid 14 days':''}</td></tr></table></td></tr>
+ <tr><td style="padding:8px 24px"><table width="100%" role="presentation" cellpadding="0" cellspacing="0"><tr><th style="${th}">Description</th><th style="${th};text-align:right">Qty</th><th style="${th};text-align:right">Price</th><th style="${th};text-align:right">Amount</th></tr>
+ ${(o.lines||[]).map(l=>`<tr><td style="${td}">${e(l.desc)}</td><td style="${td};text-align:right">${e(l.qty??1)}</td><td style="${td};text-align:right;white-space:nowrap">${money(l.price)}</td><td style="${td};text-align:right;white-space:nowrap">${money(n2(l.qty??1)*n2(l.price))}</td></tr>`).join('')}
+ </table></td></tr>
+ <tr><td style="padding:6px 24px 18px"><table role="presentation" align="right" cellpadding="0" cellspacing="0" style="font-size:14px"><tr><td style="padding:3px 18px 3px 0;color:#555">Subtotal</td><td align="right">${money(c.sub)}</td></tr><tr><td style="padding:3px 18px 3px 0;color:#555">Sales tax${o.taxExempt?' (exempt)':' '+rate(o)+'%'}</td><td align="right">${money(c.tax)}</td></tr><tr><td style="padding:8px 18px 3px 0;font-weight:bold;font-size:16px;border-top:2px solid #13213a">Total</td><td align="right" style="font-weight:bold;font-size:16px;border-top:2px solid #13213a;padding-top:8px">${money(c.total)}</td></tr>${c.paid?`<tr><td style="padding:3px 18px 3px 0;color:#555">Paid</td><td align="right">${money(c.paid)}</td></tr><tr><td style="padding:3px 18px 3px 0;font-weight:bold">Balance due</td><td align="right" style="font-weight:bold">${money(c.balance)}</td></tr>`:''}</table></td></tr>
+ ${o.notes?`<tr><td style="padding:0 24px 14px;font-size:14px;white-space:pre-wrap">${e(o.notes)}</td></tr>`:''}
+ <tr><td style="padding:6px 24px 22px" align="center"><a href="${e(link)}" style="display:inline-block;background:#1b55c2;color:#fff;text-decoration:none;padding:11px 22px;border-radius:6px;font-weight:bold;font-size:14px">View or print the ${e(kind.toLowerCase())}</a></td></tr>
+ ${sv.terms?`<tr><td style="padding:0 24px 18px;font-size:11.5px;color:#555;white-space:pre-wrap;border-top:1px solid #e3e6ea;padding-top:12px">${e(sv.terms)}</td></tr>`:''}
+ <tr><td style="background:#f3f5f8;padding:14px 24px;font-size:12.5px;color:#555">${e(sv.companyName||'')} · ${e(sv.address||'')} · ${e(sv.phone||'')}${sv.email?' · '+e(sv.email):''}</td></tr>
+</table></td></tr></table></body></html>`;
+}
 async function sendPanel(o){
   const cu=byId('customers',o.customerId);if(!cu){toast('Choose a customer and save first');return}
   const {kind,html}=buildDoc(o);
@@ -895,16 +914,36 @@ async function sendPanel(o){
   const canShare=!!navigator.share;
   panel.innerHTML=`<strong>Send ${kind.toLowerCase()} #${esc(o.number)} to ${esc(cu.company||cu.name||'customer')}</strong>
    <div class="small" style="margin:6px 0 10px"><a href="${esc(link)}" target="_blank" rel="noopener">Preview the ${kind.toLowerCase()}</a> · the customer sees exactly this page.</div>
+   <div class="fgrid" style="margin-bottom:10px">
+    <div class="fld half"><label for="snd_to">To</label><input id="snd_to" type="email" value="${esc(email)}" placeholder="customer@email.com"></div>
+    <div class="fld half"><label for="snd_subj">Subject</label><input id="snd_subj" type="text" value="${esc(subject)}"></div>
+    <div class="fld"><label for="snd_msg">Message (the ${kind.toLowerCase()} itself is included below it)</label><textarea id="snd_msg" rows="4">${esc(kind==='Quote'?`${greet}\n\nThanks for the opportunity. Your quote is below; reply to this email or call ${settings.phone||''} with any questions.`:kind==='Invoice'?`${greet}\n\nYour invoice is below. Thank you for your business.`:`${greet}\n\nHere is your order confirmation.`)}</textarea></div>
+   </div>
+   <div class="chips" style="margin-bottom:10px"><button class="btn primary" id="snd_now">✉ Send email now</button><span class="small muted" id="snd_status"></span></div>
+   <div class="small muted" style="margin-bottom:6px">Or send it yourself:</div>
    <div class="chips">
-    <a class="btn primary" id="snd_mail" href="mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(bodyTxt)}">✉ Email${email?' '+esc(email):' (no email on file)'}</a>
+    <a class="btn" id="snd_mail" href="mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(bodyTxt)}">✉ Email${email?' '+esc(email):' (no email on file)'}</a>
     <a class="btn" id="snd_sms" href="sms:${esc(phone)}${phone?'?&':'?'}body=${encodeURIComponent(smsTxt)}">💬 Text${phone?' '+esc(cu.phone):' (no phone on file)'}</a>
     ${canShare?`<button class="btn" id="snd_share">⇪ Share…</button>`:''}
     <button class="btn" id="snd_copy">Copy link</button>
     <button class="btn ghost" id="snd_close">Close</button>
    </div>
    <div class="small muted" style="margin-top:8px">Email and Text open your own mail or messaging app with the message filled in; press send there. Share works with WhatsApp and other apps on your phone.</div>`;
-  const logSent=async how=>{try{if(o.id)await db.doc('orders/'+o.id).update({sentAt:new Date().toISOString(),sentHow:how});const cc=byId('customers',cu.id);await db.doc('customers/'+cu.id).update({activity:[...((cc&&cc.activity)||[]),{type:how==='sms'?'Text':how==='email'?'Email':'Note',date:today(),note:`${kind} #${o.number} sent (${how})`}]})}catch(_){}};
+  const logSent=async how=>{try{if(o.id)await db.doc('orders/'+o.id).update({sentAt:new Date().toISOString(),sentHow:how});o.sentAt=new Date().toISOString();const cc=byId('customers',cu.id);await db.doc('customers/'+cu.id).update({activity:[...((cc&&cc.activity)||[]),{type:how==='sms'?'Text':how==='email'?'Email':'Note',date:today(),note:`${kind} #${o.number} sent (${how})`}]})}catch(_){}};
   $('#snd_mail').onclick=()=>logSent('email');$('#snd_sms').onclick=()=>logSent('sms');
+  $('#snd_now').onclick=async()=>{
+    const to=$('#snd_to').value.trim(),subj=$('#snd_subj').value.trim(),msg=$('#snd_msg').value;const st=$('#snd_status'),bt=$('#snd_now');
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)){st.textContent='Enter a valid email address.';$('#snd_to').focus();return}
+    bt.disabled=true;st.textContent='Sending…';
+    try{
+      const {data,error}=await sb.functions.invoke('send-doc',{body:{to,subject:subj,html:buildEmailHtml(o,link,msg),text:`${msg}\n\n${kind} #${o.number} · ${money(c.total)}\n${link}`,fromName:co,replyTo:settings.email||''}});
+      if(error){let m=error.message||'failed';try{const r=await error.context?.json();if(r&&r.error)m=r.error}catch(_){}throw new Error(m)}
+      if(data&&data.error)throw new Error(data.error);
+      st.innerHTML=`<span class="pos">Sent to ${esc(to)}</span>`;toast(`${kind} emailed to ${to}`);
+      if(cu.email!==to){try{await db.doc('customers/'+cu.id).update({email:to})}catch(_){}}
+      await logSent('email');
+    }catch(err){bt.disabled=false;st.innerHTML=`<span class="neg">${esc(err.message||'Could not send')}</span>`;if(/configured|Function not found|404/i.test(err.message||''))st.innerHTML+=' <span class="muted">Direct email isn\'t set up yet; use the Email button below meanwhile.</span>'}
+  };
   $('#snd_copy').onclick=async()=>{try{await navigator.clipboard.writeText(link);toast('Link copied')}catch(_){prompt('Copy this link',link)}logSent('link')};
   const sh=$('#snd_share');if(sh)sh.onclick=async()=>{try{await navigator.share({title:subject,text:bodyTxt});logSent('share')}catch(_){}};
   $('#snd_close').onclick=()=>panel.remove();

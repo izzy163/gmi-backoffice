@@ -24,3 +24,9 @@ Database changes go in `schema.sql` (it is safe to re-run) so they stay tracked.
 Each table is `id, data (jsonb), created_at, updated_at`. The flat views `v_units` and
 `v_orders` are for reporting tools or an accountant. Supabase → Database → Backups holds
 daily backups; the app's Settings page also exports every list as CSV.
+
+## Direct email (Resend)
+
+`supabase/functions/send-doc/index.ts` sends quotes/invoices from the app. Deploy it as an Edge
+Function named `send-doc` (dashboard editor or `supabase functions deploy send-doc`), and set
+secrets `RESEND_API_KEY`, `FROM_EMAIL` (an address on the verified domain) and optionally `BCC_EMAIL`.
