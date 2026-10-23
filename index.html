@@ -739,7 +739,8 @@ function openOrder(id,preset){
    <div class="fld"><label for="o_notes">Notes printed on the document</label><textarea id="o_notes" rows="2">${esc(d.notes||'')}</textarea></div>
    <div class="fld"><label for="o_inotes">Internal notes</label><textarea id="o_inotes" rows="2">${esc(d.internalNotes||'')}</textarea></div>
   </div>`;
-  const foot=`<div class="grp">${ro?'':`<button class="btn primary" id="osave">${id?'Save':'Create'}</button>`}<button class="btn" id="odoc">Download document</button><button class="btn" data-close>Close</button></div>${id&&!ro?'<button class="btn danger" id="odel">Delete</button>':''}`;
+  const adv=ro?'':(d.status==='quote'?`<button class="btn primary" id="oadv" data-to="order">Convert to sales order →</button>`:d.status==='order'?`<button class="btn primary" id="oadv" data-to="invoiced">Invoice this order →</button>`:'');
+  const foot=`<div class="grp">${adv}${ro?'':`<button class="btn ${adv?'':'primary'}" id="osave">${id?'Save':'Create'}</button>`}<button class="btn" id="odoc">Download document</button><button class="btn" data-close>Close</button></div>${id&&!ro?'<button class="btn danger" id="odel">Delete</button>':''}`;
   shell(`#${esc(d.number)} · ${esc(OSTAT[d.status])}`,body,foot);
   if(ro)$('#dbody').querySelectorAll('input,select,textarea').forEach(el=>el.disabled=true);
   renderLines();renderPays();renderUnitPicker();
@@ -768,6 +769,7 @@ function openOrder(id,preset){
   const aq=$('#add_q');if(aq){aq.addEventListener('focus',renderPick);aq.addEventListener('keydown',ev=>{if(ev.key==='Enter'){ev.preventDefault();const f=$('#add_res .pickitem');if(f)f.click()}if(ev.key==='Escape'){$('#add_res').hidden=true}})}
   h.addEventListener('click',e=>{if(!e.target.closest('.picker')){const box=$('#add_res');if(box)box.hidden=true}});
   const s=$('#osave');if(s)s.onclick=()=>{sync();saveOrder()};
+  const av=$('#oadv');if(av)av.onclick=()=>{sync();const to=av.dataset.to;if(to==='order'&&!d.lines.length){toast('Add at least one line first');return}d.status=to;$('#o_status').value=to;if(to==='invoiced'&&!d.invoiceDate){d.invoiceDate=today();$('#o_inv').value=d.invoiceDate}saveOrder(to)};
   $('#odoc').onclick=()=>{sync();downloadDoc(d)};
   const dl=$('#odel');if(dl)armDelete(dl,deleteOrder);
 }
@@ -808,21 +810,22 @@ function renderPays(){
   const d=drawer.draft;
   $('#opays').innerHTML=d.payments.length?d.payments.map((p,i)=>`<div class="pitem" style="cursor:default"><span class="pt">${fdate(p.date)} · ${esc(p.method||'')}${p.note?' · '+esc(p.note):''}</span><span class="num">${money(p.amount)} ${canWrite?`<button class="btn ghost sm" data-rmp="${i}" aria-label="Remove payment">✕</button>`:''}</span></div>`).join(''):'<div class="small muted">No payments yet.</div>';
 }
-async function saveOrder(){
+async function saveOrder(advanced){
   if(!need())return;
   const d=drawer.draft, id=drawer.id;
   if(!d.customerId){toast('Choose a customer');$('#o_cust').focus();return}
   if(d.status==='invoiced'&&!d.invoiceDate)d.invoiceDate=today();
   const dup=S.orders.find(o=>o.number==d.number&&o.id!==id);if(dup){toast('Number #'+d.number+' is already used');return}
   const data={...d};data.lines=d.lines.map(l=>({unitId:l.unitId||'',productId:l.productId||'',desc:l.desc||'',qty:l.qty==null?1:n2(l.qty),price:l.price==null?0:n2(l.price),cost:l.cost==null?null:n2(l.cost),taxable:l.taxable!==false}));
-  const btn=$('#osave');btn.disabled=true;
+  const btn=$('#osave');btn.disabled=true;const ab=$('#oadv');if(ab)ab.disabled=true;
   try{
     let oid=id;
     if(id)await db.doc('orders/'+id).set(data);
     else{const ref=db.collection('orders').doc();oid=ref.id;data.createdAt=new Date().toISOString();await ref.set(data)}
     await syncUnits(oid,data,drawer.prevUnits);
-    toast(id?'Saved':'#'+data.number+' created');closeDrawer();
-  }catch(err){btn.disabled=false;toast('Could not save: '+(err&&(err.message||err.code)||'error'))}
+    toast(advanced==='order'?`#${data.number} is now a sales order — units marked sold`:advanced==='invoiced'?`Invoice #${data.number} created`:(id?'Saved':'#'+data.number+' created'));closeDrawer();
+    if(advanced)openOrder(oid);
+  }catch(err){btn.disabled=false;if(ab)ab.disabled=false;toast('Could not save: '+(err&&(err.message||err.code)||'error'))}
 }
 async function syncUnits(oid,o,prev){
   const cur=o.lines.map(l=>l.unitId).filter(Boolean);
