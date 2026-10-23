@@ -473,7 +473,8 @@ VIEWS_R.sales=function(){
    {l:'Date',v:o=>fdate(o.invoiceDate||o.date)},
    {l:'Total',n:1,v:o=>money(calc(o).total)},
    {l:'Balance',n:1,v:o=>{const c=calc(o);return o.status==='invoiced'&&c.balance>0.004?`<span class="neg">${money(c.balance)}</span>`:'<span class="muted">—</span>'}},
-   {l:'Profit',n:1,v:o=>{const c=calc(o);return `${money(c.profit)} <span class="small muted">${c.sub?Math.round(c.margin*100)+'%':''}</span>`}}
+   {l:'Profit',n:1,v:o=>{const c=calc(o);return `${money(c.profit)} <span class="small muted">${c.sub?Math.round(c.margin*100)+'%':''}</span>`}},
+   {l:'',v:o=>o.status==='void'?'':`<button class="btn sm" data-send="${esc(o.id)}" title="${o.sentAt?'Sent '+fdate(o.sentAt.slice(0,10)):'Not sent yet'}">${o.sentAt?'Resend':'Send'}</button>`}
   ],rows,'orders',loadingOr('orders',S.orders.length?'<strong>Nothing in this view.</strong>':'<strong>No quotes yet.</strong>Start a quote and add equipment straight from inventory.'));
 };
 VIEWS_R.customers=function(){
@@ -586,6 +587,7 @@ VIEWS_R.setup=function(){
 const main=$('#main');
 main.addEventListener('input',e=>{const k=e.target.dataset.q;if(k!=null){UI.q[k]=e.target.value;schedule()}});
 main.addEventListener('click',e=>{
+  const sb_=e.target.closest('[data-send]');if(sb_){e.stopPropagation();openOrder(sb_.dataset.send);const o=byId('orders',sb_.dataset.send);if(o)sendPanel(o);return}
   const t=e.target.closest('[data-chip],[data-new],[data-neworder],[data-open],[data-cmode],[data-mtab],[data-savesettings],[data-export],[data-changepw],[data-dedupe]');if(!t)return;
   if(t.dataset.chip){UI.filter[t.dataset.chip]=t.dataset.v;render()}
   else if(t.dataset.new){openForm(t.dataset.new)}
@@ -685,7 +687,7 @@ const EXTRA={
     const sales=os.filter(o=>o.status==='invoiced').reduce((a,o)=>a+calc(o).sub,0), owed=os.filter(o=>o.status==='invoiced').reduce((a,o)=>a+Math.max(0,calc(o).balance),0);
     const log=(c.activity||[]).slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
     return `<div class="box" style="margin-top:16px"><div class="kv"><dt>Lifetime sales</dt><dd>${money(sales)}</dd><dt>Owes</dt><dd class="${owed>0?'neg':''}">${money(owed)}</dd></div>${canWrite?`<div style="margin-top:10px"><button class="btn sm" data-quotefor="${esc(id)}">+ New quote for this customer</button></div>`:''}</div>
-    ${os.length?`<h3>Quotes & invoices</h3>`+os.map(o=>`<div class="pitem" data-goorder="${esc(o.id)}"><span class="pt">#${esc(o.number)} ${obadge(o)} <span class="small muted">${fdate(o.invoiceDate||o.date)}</span></span><span class="num">${money(calc(o).total)}</span></div>`).join(''):''}
+    ${os.length?`<h3>Quotes & invoices</h3>`+os.map(o=>`<div class="pitem" data-goorder="${esc(o.id)}"><span class="pt">#${esc(o.number)} ${obadge(o)} <span class="small muted">${fdate(o.invoiceDate||o.date)}${o.sentAt?' · sent':''}</span></span><span class="num">${money(calc(o).total)}</span></div>`).join(''):''}
     <h3>Activity</h3>${canWrite?`<div class="inline"><select id="act_type">${ACTS.map(a=>`<option>${a}</option>`).join('')}</select><input id="act_date" type="date" value="${today()}"><input id="act_note" type="text" placeholder="What happened? Next step?" style="flex:3 1 200px"><button class="btn" id="act_add">Log</button></div>`:''}
     <div class="log">${log.map(a=>`<div class="ent"><div class="small muted">${esc(a.type)} · ${fdate(a.date)}</div><div>${esc(a.note)}</div></div>`).join('')||'<div class="small muted">No activity logged yet.</div>'}</div>`;
   }
@@ -740,7 +742,7 @@ function openOrder(id,preset){
    <div class="fld"><label for="o_inotes">Internal notes</label><textarea id="o_inotes" rows="2">${esc(d.internalNotes||'')}</textarea></div>
   </div>`;
   const adv=ro?'':(d.status==='quote'?`<button class="btn primary" id="oadv" data-to="order">Convert to sales order →</button>`:d.status==='order'?`<button class="btn primary" id="oadv" data-to="invoiced">Invoice this order →</button>`:'');
-  const foot=`<div class="grp">${adv}${ro?'':`<button class="btn ${adv?'':'primary'}" id="osave">${id?'Save':'Create'}</button>`}<button class="btn" id="odoc">Download document</button><button class="btn" data-close>Close</button></div>${id&&!ro?'<button class="btn danger" id="odel">Delete</button>':''}`;
+  const foot=`<div class="grp">${adv}${ro?'':`<button class="btn ${adv?'':'primary'}" id="osave">${id?'Save':'Create'}</button>`}${id?`<button class="btn" id="osend">Send to customer</button>`:''}<button class="btn" id="odoc">Download document</button><button class="btn" data-close>Close</button></div>${id&&!ro?'<button class="btn danger" id="odel">Delete</button>':''}`;
   shell(`#${esc(d.number)} · ${esc(OSTAT[d.status])}`,body,foot);
   if(ro)$('#dbody').querySelectorAll('input,select,textarea').forEach(el=>el.disabled=true);
   renderLines();renderPays();renderUnitPicker();
@@ -771,6 +773,7 @@ function openOrder(id,preset){
   const s=$('#osave');if(s)s.onclick=()=>{sync();saveOrder()};
   const av=$('#oadv');if(av)av.onclick=()=>{sync();const to=av.dataset.to;if(to==='order'&&!d.lines.length){toast('Add at least one line first');return}d.status=to;$('#o_status').value=to;if(to==='invoiced'&&!d.invoiceDate){d.invoiceDate=today();$('#o_inv').value=d.invoiceDate}saveOrder(to)};
   $('#odoc').onclick=()=>{sync();downloadDoc(d)};
+  const sd=$('#osend');if(sd)sd.onclick=()=>{sync();sendPanel({...d,id})};
   const dl=$('#odel');if(dl)armDelete(dl,deleteOrder);
 }
 function pickCandidates(q){
@@ -842,7 +845,7 @@ async function deleteOrder(){
 }
 
 /* ---------- printable document ---------- */
-function downloadDoc(o){
+function buildDoc(o){
   const c=calc(o),cu=byId('customers',o.customerId)||{},s=settings;
   const kind=o.status==='invoiced'?'Invoice':o.status==='order'?'Sales Order':'Quote';
   const e=esc;
@@ -865,7 +868,46 @@ ${c.paid?`<div><span>Paid</span><span>${money(c.paid)}</span></div><div class="g
 ${o.notes?`<p style="margin-top:20px;white-space:pre-wrap">${e(o.notes)}</p>`:''}
 ${s.terms?`<div class="terms">${e(s.terms)}</div>`:''}
 </body></html>`;
-  saveFile(`${kind.replace(' ','-')}-${o.number}.html`,html);
+  return {kind,html,filename:`${kind.replace(' ','-')}-${o.number}.html`};
+}
+function downloadDoc(o){const d=buildDoc(o);saveFile(d.filename,d.html)}
+const DOCBUCKET='documents';
+async function sendPanel(o){
+  const cu=byId('customers',o.customerId);if(!cu){toast('Choose a customer and save first');return}
+  const {kind,html}=buildDoc(o);
+  let panel=$('#sendpanel');if(!panel){panel=document.createElement('div');panel.id='sendpanel';panel.className='box';panel.style.marginTop='16px';$('#dbody').prepend(panel)}
+  panel.innerHTML=`<strong>Send ${kind.toLowerCase()} #${esc(o.number)} to ${esc(cu.company||cu.name||'customer')}</strong><div class="small muted" style="margin-top:4px">Publishing a link…</div>`;
+  panel.scrollIntoView({behavior:'smooth',block:'start'});
+  let link='';
+  try{
+    const path=`${o.id||'draft'}/${kind.replace(' ','-')}-${o.number}.html`;
+    const {error}=await sb.storage.from(DOCBUCKET).upload(path,new Blob([html],{type:'text/html'}),{contentType:'text/html; charset=utf-8',upsert:true});if(error)throw error;
+    link=sb.storage.from(DOCBUCKET).getPublicUrl(path).data.publicUrl;
+  }catch(err){panel.innerHTML=`<strong>Couldn't publish the document.</strong><div class="small">${esc(err.message||err.code||'')}. Run storage.sql in Supabase to create the documents bucket, or use Download document and attach it yourself.</div>`;return}
+  const co=settings.companyName||'';const c=calc(o);
+  const subject=`${kind} #${o.number} from ${co}`;
+  const greet=cu.name?`Hi ${cu.name.split(' ')[0]},`:'Hello,';
+  const bodyTxt=kind==='Quote'?`${greet}\n\nHere is your quote #${o.number} for ${money(c.total)}:\n${link}\n\nQuotes are valid for 14 days. Reply here or call ${settings.phone||''} with any questions.\n\n${co}`:
+    kind==='Invoice'?`${greet}\n\nHere is invoice #${o.number} for ${money(c.total)}${c.balance>0.004&&c.balance<c.total?` (balance due ${money(c.balance)})`:''}:\n${link}\n\nThank you for your business.\n\n${co}`:
+    `${greet}\n\nHere is your order confirmation #${o.number} for ${money(c.total)}:\n${link}\n\n${co}`;
+  const smsTxt=`${co}: ${kind} #${o.number} for ${money(c.total)}: ${link}`;
+  const email=cu.email||'',phone=(cu.phone||'').replace(/[^\d+]/g,'');
+  const canShare=!!navigator.share;
+  panel.innerHTML=`<strong>Send ${kind.toLowerCase()} #${esc(o.number)} to ${esc(cu.company||cu.name||'customer')}</strong>
+   <div class="small" style="margin:6px 0 10px"><a href="${esc(link)}" target="_blank" rel="noopener">Preview the ${kind.toLowerCase()}</a> · the customer sees exactly this page.</div>
+   <div class="chips">
+    <a class="btn primary" id="snd_mail" href="mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(bodyTxt)}">✉ Email${email?' '+esc(email):' (no email on file)'}</a>
+    <a class="btn" id="snd_sms" href="sms:${esc(phone)}${phone?'?&':'?'}body=${encodeURIComponent(smsTxt)}">💬 Text${phone?' '+esc(cu.phone):' (no phone on file)'}</a>
+    ${canShare?`<button class="btn" id="snd_share">⇪ Share…</button>`:''}
+    <button class="btn" id="snd_copy">Copy link</button>
+    <button class="btn ghost" id="snd_close">Close</button>
+   </div>
+   <div class="small muted" style="margin-top:8px">Email and Text open your own mail or messaging app with the message filled in; press send there. Share works with WhatsApp and other apps on your phone.</div>`;
+  const logSent=async how=>{try{if(o.id)await db.doc('orders/'+o.id).update({sentAt:new Date().toISOString(),sentHow:how});const cc=byId('customers',cu.id);await db.doc('customers/'+cu.id).update({activity:[...((cc&&cc.activity)||[]),{type:how==='sms'?'Text':how==='email'?'Email':'Note',date:today(),note:`${kind} #${o.number} sent (${how})`}]})}catch(_){}};
+  $('#snd_mail').onclick=()=>logSent('email');$('#snd_sms').onclick=()=>logSent('sms');
+  $('#snd_copy').onclick=async()=>{try{await navigator.clipboard.writeText(link);toast('Link copied')}catch(_){prompt('Copy this link',link)}logSent('link')};
+  const sh=$('#snd_share');if(sh)sh.onclick=async()=>{try{await navigator.share({title:subject,text:bodyTxt});logSent('share')}catch(_){}};
+  $('#snd_close').onclick=()=>panel.remove();
 }
 function saveFile(name,data){
   const type=name.endsWith('.csv')?'text/csv;charset=utf-8':'text/html;charset=utf-8';
